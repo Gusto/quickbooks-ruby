@@ -2,6 +2,7 @@ module Quickbooks
   module Model
     class BaseModel
       include Definition
+      include ActiveModel::AttributeMethods
       include ActiveModel::Validations
       include Validator
       include ROXML
@@ -27,6 +28,14 @@ module Quickbooks
         step2
       end
 
+      def as_json(options = nil)
+        options = {} if options.nil?
+        except_conditions = ["roxml_references"]
+        except_conditions << options[:except]
+        options[:except] = except_conditions.flatten.uniq.compact
+        super(options)
+      end
+
       def to_xml_ns(options = {})
         to_xml_inject_ns(self.class::XML_NODE, options)
       end
@@ -46,7 +55,7 @@ module Quickbooks
       def inspect
         # it would be nice if we could inspect all the children,
         # but it's likely to blow the stack in some cases
-        "#<#{self.class} " + 
+        "#<#{self.class} " +
         "#{attributes.map{|k,v| "#{k}: #{v.nil? ? 'nil' : v.to_s }"}.join ", "}>"
       end
       class << self
@@ -78,7 +87,9 @@ module Quickbooks
           references = args.empty? ? reference_attrs : args
 
           references.each do |attribute|
-            method_name = "#{attribute.to_s.gsub('_ref', '_id')}=".to_sym
+            last_index = attribute.to_s.rindex('_ref')
+            field_name = !last_index.nil? ? attribute.to_s.slice(0, last_index) : attribute
+            method_name = "#{field_name}_id=".to_sym
             unless instance_methods(false).include?(method_name)
               method_definition = <<-METH
               def #{method_name}(id)
